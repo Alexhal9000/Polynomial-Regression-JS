@@ -1,0 +1,376 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Polynomial Regression JS</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC3c9BD0E_e3rqEIeaRYGmxVsN6LpoVeJ8"></script>
+    <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+    
+    <script src="../../ChartJS/Chart.min.js"></script>
+    <script src="scripts/polynomialregression.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/5.2.0/math.js" type="text/javascript"></script>
+    
+    <style>
+        * {
+            font-family: 'Roboto', sans-serif;
+            color: white;
+            background-color: #1F1F1F;
+        }
+        
+        #description{
+            text-align: justify;
+            font-size: 0.7em;
+            width: 80%;
+            margin: 0 0 50px 10%;
+        }
+        
+        #cont{
+            width: 500px;
+            margin-left: calc(50% - 250px);
+            align-content: center;
+            text-align: center;
+        }
+        #logo{
+            margin: 70px 0 50px 0;
+            background-image: url("nasa.png");
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: contain;
+            width: 100%;
+            height: 100px;
+        }
+        #ord{
+            width: 20px;
+        }
+        
+        input[type=text]{
+            padding-left: 10px;
+        }
+        
+                
+        #latbox, #longbox{
+            width:24%;
+            text-align: left;
+            display:inline-block;
+            margin: 0 0.5%;
+        }   
+        
+        #latbox > input, #longbox > input{
+            width: 90%;
+        }
+        #orderbox > input{
+            width: 55%;
+        }
+        
+        #orderbox{
+            text-align: left;
+            width:10%;
+            display: inline-block;
+            margin: 0 0.5%;
+        }
+        
+        table{
+            display: inline-block;
+            margin-top: 20px;
+        }
+        #myTable{
+            float: left;
+        }
+        #myCompTable{
+            float: right;
+        }
+        #loading{
+            position: absolute;
+            top: 208px;
+            background-color: rgba(0, 0, 0, 0);
+            width: 100vw;
+            left: 0;
+            height: 100vh;
+        }
+        
+        #loading > img{
+            width: 100px;
+            height: 100px;
+            margin-top: calc(40% - 50px);
+        }
+        #rSquared{
+            display: inline-block;
+            width: 49%;
+            float: left;
+        }
+        #func{
+            display: inline-block;
+            width: 49%;
+            float: right;
+            font-size: 0.8em;
+            cursor: pointer;
+        }
+        .subcont{
+            width: 100%;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+        th,caption{
+            padding-bottom: 15px;
+        }
+        
+    </style>
+    <script>
+        var latlon = [];
+    </script>
+    
+</head>
+
+<body>
+    
+    <div id="cont">
+        
+        <div id="logo"></div>
+        
+        <div id="description">
+            This program connects to the NASA's Prediction Of Worldwide Energy Resources database and gets the daily average of "All Sky Insolation Incident on a Horizontal Surface" from the last 28 years, it does so in the desired location given by a latitude and a longitude. Furthermore, it calculates the function that best describes the behaviour of the collected data through methods from "polynomialregression.js" using a polinomial regression of nth order. <a href="https://github.com/Alexhal9000"> Learn more in my Git.</a>
+        </div>
+        
+        <span id="latbox"><div>Latitude</div><input type="text" id="lat" placeholder="21.170859" value="21.170859"></span>
+        <span id="longbox"><div>Longitude</div><input type="text" id="lon" placeholder="-101.709443" value="-101.709443"></span>
+        <span id="orderbox"><div>Order</div><input type="text" id="ord" placeholder="9" value="9" title="Order of the expected polynomial."></span>       
+        
+        <input id="btn" type="button" value="GO!" />
+                
+        <canvas id="plotRegression">
+        </canvas>
+        
+        <div class="subcont">
+            <span id="rSquared"></span>
+            <span id="func"></span>
+        </div>
+        
+        <table id="myTable">
+        </table>
+        
+        <table id="myCompTable">
+        </table>
+        
+        <div id="loading" style="display: none;">
+            <img src="rings.svg">
+        </div>
+        
+        
+    </div>
+    <script>
+
+        
+        $("#btn").click(function(){
+            $("#loading").css("display","block");
+            fetchAverage($("#lat").val(),$("#lon").val());
+        });
+        
+        
+        function fetchAverage(lat,lon){
+            $.ajax({
+                type: 'POST',
+                url: 'https://power.larc.nasa.gov/cgi-bin/v1/DataAccess.py',
+                data: 'request=execute&startDate=19900101&endDate=20180101&lat='+lat+'&lon='+lon+'&identifier=SinglePoint&parameters=ALLSKY_SFC_SW_DWN&userCommunity=SSE&tempAverage=DAILY&user=anonymous&outputList=JSON',
+                success: function(data, textStatus, jqXHR) {
+                    //console.log(data);
+                    if(data.messages[0]!==undefined){
+                       alert(data.messages[0].Alert.Description.Issue); 
+                    }
+
+                    var arr = data.features[0].properties.parameter.ALLSKY_SFC_SW_DWN;
+                    var fullarr = new Object();
+                    var w = 0;
+                    var av = 0;
+                    var counter = 0;
+                    
+                    /*Object.keys(arr).forEach(function (key) {
+                        if(!(key in fullarr)){
+                            fullarr[key] = [];
+                        }
+                    });*/
+                    
+                    Object.keys(arr).forEach(function (key) {
+                        var day = new Object();
+                        day[key.substring(4)] = arr[key];
+                        if(!(key.substring(0,4) in arr)){
+                            arr[key.substring(0,4)] = [];
+                        }
+                        arr[key.substring(0,4)].push(day);
+                        delete arr[key];
+                    });
+                    
+                    
+                    Object.keys(arr).forEach(function (key) {
+                        arr[key].forEach(function (item) {
+                            var it = Object.keys(item);
+                            var keyb = it[0];
+                            if(!(keyb in fullarr)){
+                                fullarr[keyb] = [];
+                            }
+                            fullarr[keyb].push(item[keyb]);
+                        });
+                    });
+                    
+                    var averages = new Object();
+                    
+                    Object.keys(fullarr).forEach(function (key) {
+                        var cont = 0;
+                        var av = 0;
+                        fullarr[key].forEach(function (val) {
+                            if(val>0){
+                                av+=val;
+                                cont++;
+                            }
+                        });
+                        av = av / cont;
+                        averages[key] = av;
+                    });
+                    
+                    var orderedAv = new Object();
+                    var k = 1;
+                    $("#myTable").append("<caption>Raw data</caption><tr><th>day</th><th>irradiance</th></tr>");
+                    Object.keys(averages).sort().forEach(function(key) { 
+                        orderedAv[k] = averages[key]; 
+                        $("#myTable").append("<tr><td>"+k+"</td><td>"+averages[key]+"</td></tr>");
+                        k++;
+                    });
+                    
+                    
+                    var coefficients = [];
+                    var orderD = parseInt($("#ord").val());
+                    
+                    //Do the polinomial regression----------------------------------------------------
+                    coefficients = polynomialRegression(orderedAv, orderD); //parameter 1 is an object with key being x and value y. parameter 2 is the expected order of the polynomial function. 
+                    var polynom = "";
+                    var polynomURI = "";
+                    var ord = 0;
+                    coefficients.forEach(function(xx){
+                        
+                        if(xx<0){
+                            polynom += " - " + (-1*(parseFloat(xx).toExponential(3))) + "X^" +ord;
+                            polynomURI += "-" + (-1*(parseFloat(xx).toExponential(6))) + "X%5E" +ord;
+                        }else{
+                            if(ord == 0){
+                                polynom += parseFloat(xx).toExponential(3);
+                                polynomURI += parseFloat(xx).toExponential(6);
+                            }else{
+                                polynom += " + " + (-1*(parseFloat(xx).toExponential(3))) + "X^" +ord;
+                                polynomURI += "%2B" + parseFloat(xx).toExponential(6) + "X%5E" +ord;
+                            }
+                        }
+                        
+                        ord++;
+                        
+                    });
+                    polynomURI = polynomURI.replace(/\s/g, '');
+                    polynomURI = polynomURI.replace('e+0', '');
+                    polynomURI += "+integrate+from+X+%3D+0+to+366";
+                    
+                    var polynomshort = "";
+                    var ord = 0;
+                    coefficients.forEach(function(xx){
+                        if(xx<0){
+                            polynomshort += " - " + (-1*(parseFloat(xx).toExponential(3))) + " X<sup>" +ord+"</sup>";
+                        }else{
+                            if(ord == 0){
+                                polynomshort += parseFloat(xx).toExponential(3);
+                            }else{
+                                polynomshort += " + " + parseFloat(xx).toExponential(3) + " X<sup>" +ord+"</sup>";
+                            }
+                        }
+                        
+                        ord++;
+                    });
+                    
+                    $("#func").html("f(x) = " + polynomshort);
+                    $("#func").click(function(){
+                        window.open("https://www.wolframalpha.com/input/?i=" + polynomURI,"_blank");
+                    });
+                    
+                    console.log("Computed function:");
+                    console.log(polynom);
+                    
+                    var computedVals = [];
+                    $("#myCompTable").append("<caption>Computed data</caption><tr><th>day</th><th>irradiance</th></tr>");
+                    var rsquare = 0;
+                    Object.keys(orderedAv).forEach(function(key){
+                        var ord = 0;
+                        var yy = 0;
+                        coefficients.forEach(function(co){
+                            yy += co[0] * Math.pow(key,ord);
+                            ord++;
+                        });
+                        computedVals[key] = yy;
+                        rsquare += Math.pow(orderedAv[key] - yy, 2);
+                        $("#myCompTable").append("<tr><td>"+key+"</td><td>"+yy+"</td></tr>");
+                        
+                    });
+                    var rs = rsquare / Object.keys(orderedAv).length;
+                    $("#rSquared").html("R<sup>2</sup> = " + rs);
+                    
+                    
+                    var ctx = document.getElementById("plotRegression").getContext('2d');
+                    var myChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: Object.keys(orderedAv),
+                            datasets:[{
+                                label: 'Raw data',
+                                backgroundColor: "#FFFFFF77",
+                                data:Object.values(orderedAv)
+                            },{
+                                label: 'Computed data',
+                                backgroundColor: "#CC3333AA",
+                                data:computedVals
+                            }]
+                        },
+                        options: { 
+                            legend: {
+                                labels: {
+                                    fontColor: "white",
+                                    fontSize: 8
+                                }
+                            },
+                            scales: {
+                                yAxes: [{
+                                  scaleLabel: {
+                                    display: true,
+                                    labelString: 'Y (solar irradiance on a horizontal)'
+                                  }
+                                }],
+                                xAxes: [{
+                                  scaleLabel: {
+                                    display: true,
+                                    labelString: 'X (day of the year)'
+                                  }
+                                }]
+                            }    
+                        }
+                    });
+                    
+                    $("#loading").css("display","none");
+                    
+
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    alert("Error de ajax."+errorThrown);
+                    $("#loading").css("display","none");
+                    //window.location = window.location;
+                }
+            });
+            
+        }
+        
+        
+        
+
+        
+        
+        
+        
+    </script>
+    
+</body>
+</html>
